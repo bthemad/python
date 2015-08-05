@@ -1,13 +1,31 @@
-from twisted.internet import reactor, protocol
+from twisted.application import internet, service
+from twisted.internet import reactor, protocol, defer
+from twisted.protocols import basic
 
+class FingerProtocol(basic.LineReceiver):
+    def lineReceived(self, user):
+        d = self.factory.getUser(user)
 
-class FingerProtocol(protocol.Protocol):
-    pass
+        def onError(err):
+            return 'Internal error in server'
+        d.addErrback(onError)
+
+        def writeResponse(message):
+            self.transport.write(message + "\r\n")
+            self.transport.loseConnection()
+        d.addCallback(writeResponse)
 
 
 class FingerFactory(protocol.ServerFactory):
     protocol = FingerProtocol
 
+    def __init__(self, **kwargs):
+        self.users = kwargs
 
-reactor.listenTCP(1079, FingerFactory())
-reactor.run()
+    def getUser(self, user):
+        return defer.succeed(self.users.get(user, "No such user"))
+
+application = service.Application('finger', uid=1, gid=1)
+factory = FingerFactory(alex='o_O')
+internet.TCPServer(79, factory).setServiceParent(
+    service.IServiceCollection(application))
