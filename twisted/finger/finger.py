@@ -1,40 +1,64 @@
 from twisted.application import internet, service
 from twisted.internet import protocol, reactor, defer
 from twisted.protocols import basic
-from twisted.web import resource, server, static
+from twisted.web import resource, server
 
 import cgi
+
+
+def catchError(err):
+    return 'Internal error in server'
 
 
 class FingerProtocol(basic.LineReceiver):
     def lineReceived(self, user):
         d = self.factory.getUser(user)
-
-        def onError(err):
-            return 'Internal error in server'
-        d.addErrback(onError)
+        d.addErrback(catchError)
 
         def writeResponse(message):
             self.transport.write(message + "\r\n")
             self.transport.loseConnection()
+
         d.addCallback(writeResponse)
 
 
-class FingerResource(resource.Resource):
-    def __init__(self, users):
-        self.users = users
+class UserStatus(resource.Resource):
+    def __init__(self, user, service):
         resource.Resource.__init__(self)
+        self.user = user
+        self.service = service
 
-    def getChild(self, username, request):
-        message_value = self.users.get(username)
-        username = cgi.escape(username)
-        if message_value is not None:
-            message_value = cgi.escape(message_value)
-            text = '<h1>%s</h1><p>%s</p>' % (username, message_value)
+    def render_GET(self, request):
+        d = self.service.getUser(self.user)
+        d.addCallback(cgi.escape)
+        d.addCallback(lambda m: '<h1>%s</h1>' % self.user + '<p>%s</p>' % m)
+        d.addCallback(request.write)
+        d.addCallback(lambda _: request.finish())
+        return server.NOT_DONE_YET
+
+
+class UserStatusTree(resource.Resource):
+    def __init__(self, service):
+        resource.Resource.__init__(self)
+        self.service = service
+
+    def render_GET(self, request):
+        d = self.service.getUsers()
+
+        def formatUsers(users):
+            l = ['<li><a href="%s">%s</a></li>' % (user, user)
+                 for user in users]
+            return '<ul>' + ' '.join(l) + '</ul>'
+        d.addCallback(formatUsers)
+        d.addCallback(request.write)
+        d.addCallback(lambda _: request.finish())
+        return server.NOT_DONE_YET
+
+    def getChild(self, path, request):
+        if path == "":
+            return UserStatusTree(self.service)
         else:
-            text = '<h1>%s</h1><p>No such user</p>' % username
-
-        return static.Data(text, 'text/html')
+            return UserStatus(path, self.service)
 
 
 class FingerService(service.Service):
@@ -51,6 +75,9 @@ class FingerService(service.Service):
     def getUser(self, user):
         return defer.succeed(self.users.get(user, "No such user"))
 
+    def getUsers(self):
+        return defer.succeed(self.users.keys())
+
     def getFingerFactory(self):
         f = protocol.ServerFactory()
         f.protocol = FingerProtocol
@@ -58,7 +85,7 @@ class FingerService(service.Service):
         return f
 
     def getResource(self):
-        r = FingerResource(self.users)
+        r = UserStatusTree(self)
         return r
 
     def startService(self):
