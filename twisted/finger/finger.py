@@ -1,10 +1,9 @@
 from twisted.application import internet, service
-from twisted.internet import protocol, reactor, defer
+from twisted.internet import protocol, reactor, defer, utils
 from twisted.protocols import basic
 from twisted.python import components
 from twisted.web import resource, server
 from zope.interface import Interface, implements
-import cgi
 
 
 class IFingerService(Interface):
@@ -111,47 +110,58 @@ components.registerAdapter(FingerSetterFactoryFromService,
 
 
 class UserStatusTree(resource.Resource):
-    implements(resource.IResource)
 
     def __init__(self, service):
         resource.Resource.__init__(self)
         self.service = service
 
+        # need to do this for resources at the root of the site
+        self.putChild("", self)
+
+    def _cb_render_GET(self, users, request):
+        userOutput = ''.join(["<li><a href=\"%s\">%s</a></li>" % (user, user)
+                              for user in users])
+        request.write("""<html><head><title>Users</title></head><body>
+            <h1>Users</h1>
+            <ul>
+            %s
+            </ul></body></html>""" % userOutput)
+        request.finish()
+
     def render_GET(self, request):
         d = self.service.getUsers()
+        d.addCallback(self._cb_render_GET, request)
 
-        def formatUsers(users):
-            l = ['<li><a href="%s">%s</a></li>' % (user, user)
-                 for user in users]
-            return '<ul>' + ' '.join(l) + '</ul>'
-        d.addCallback(formatUsers)
-        d.addCallback(request.write)
-        d.addCallback(lambda _: request.finish())
+        # signal that the rendering is not complete
         return server.NOT_DONE_YET
 
     def getChild(self, path, request):
-        if path == "":
-            return UserStatusTree(self.service)
-        else:
-            return UserStatus(path, self.service)
-
-
-components.registerAdapter(UserStatusTree, IFingerService, resource.IResource)
+        return UserStatus(user=path, service=self.service)
 
 
 class UserStatus(resource.Resource):
+
     def __init__(self, user, service):
         resource.Resource.__init__(self)
         self.user = user
         self.service = service
 
+    def _cb_render_GET(self, status, request):
+        request.write("""<html><head><title>%s</title></head>
+        <body><h1>%s</h1>
+        <p>%s</p>
+        </body></html>""" % (self.user, self.user, status))
+        request.finish()
+
     def render_GET(self, request):
         d = self.service.getUser(self.user)
-        d.addCallback(cgi.escape)
-        d.addCallback(lambda m: '<h1>%s</h1>' % self.user + '<p>%s</p>' % m)
-        d.addCallback(request.write)
-        d.addCallback(lambda _: request.finish())
+        d.addCallback(self._cb_render_GET, request)
+
+        # signal that the rendering is not complete
         return server.NOT_DONE_YET
+
+
+components.registerAdapter(UserStatusTree, IFingerService, resource.IResource)
 
 
 class FingerService(service.Service):
@@ -198,9 +208,20 @@ class MemoryFingerService(service.Service):
         self.users[user] = status
 
 
+class LocalFingerService(service.Service):
+    implements(IFingerService)
+
+    def getUser(self, user):
+        return utils.getProcessOutput("finger", [user])
+
+    def getUsers(self):
+        return defer.succeed([])
+
+
 application = service.Application('finger', uid=1, gid=1)
-# f = FingerService('/Users/alex/study/python/twisted/finger/users')
-f = MemoryFingerService(alex='Twisted head')
+f = FingerService('/Users/alex/study/python/twisted/finger/users')
+# f = MemoryFingerService(alex='Twisted head')
+# f = LocalFingerService()
 
 serviceCollection = service.IServiceCollection(application)
 f.setServiceParent(serviceCollection)
@@ -209,5 +230,5 @@ internet.TCPServer(8080, server.Site(resource.IResource(f))
                    ).setServiceParent(serviceCollection)
 internet.TCPServer(1079, IFingerFactory(f), interface='127.0.0.1'
                    ).setServiceParent(serviceCollection)
-internet.TCPServer(1080, IFingerSetterFactory(f), interface='127.0.0.1'
-                   ).setServiceParent(serviceCollection)
+# internet.TCPServer(1080, IFingerSetterFactory(f), interface='127.0.0.1'
+#                    ).setServiceParent(serviceCollection)
