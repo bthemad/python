@@ -1,4 +1,4 @@
-from twisted.application import internet, service
+from twisted.application import service
 from twisted.internet import protocol, reactor, defer, utils
 from twisted.protocols import basic
 from twisted.python import components
@@ -216,19 +216,3 @@ class LocalFingerService(service.Service):
 
     def getUsers(self):
         return defer.succeed([])
-
-
-application = service.Application('finger', uid=1, gid=1)
-f = FingerService('/Users/alex/study/python/twisted/finger/users')
-# f = MemoryFingerService(alex='Twisted head')
-# f = LocalFingerService()
-
-serviceCollection = service.IServiceCollection(application)
-f.setServiceParent(serviceCollection)
-internet.TCPServer(79, IFingerFactory(f)).setServiceParent(serviceCollection)
-internet.TCPServer(8080, server.Site(resource.IResource(f))
-                   ).setServiceParent(serviceCollection)
-internet.TCPServer(1079, IFingerFactory(f), interface='127.0.0.1'
-                   ).setServiceParent(serviceCollection)
-# internet.TCPServer(1080, IFingerSetterFactory(f), interface='127.0.0.1'
-#                    ).setServiceParent(serviceCollection)
