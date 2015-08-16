@@ -31,6 +31,7 @@
             <a href="{% url 'signup' %}" class="btn btn-default navbar-btn">Register</a>
             <a href="{% url 'login' %}" class="btn btn-default navbar-btn">Login</a>
             {% else %}
+            <a href="{% url 'talks:lists:list' %}" class="btn btn-default navbar-btn">Talks</a>
             <a href="{% url 'logout' %}" class="btn btn-default navbar-btn">Logout</a>
             {% endif %}
         </div><!--/.navbar-collapse -->

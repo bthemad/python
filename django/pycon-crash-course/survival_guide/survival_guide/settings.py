@@ -38,7 +38,9 @@ INSTALLED_APPS = (
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django_extensions',
+    'debug_toolbar',
     'crispy_forms',
+    'talks',
 )
 
 MIDDLEWARE_CLASSES = (
