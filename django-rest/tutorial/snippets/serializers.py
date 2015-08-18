@@ -13,6 +13,7 @@ class SnippetSerializer(serializers.ModelSerializer):
         fields = ('url', 'highlight', 'owner', 'title', 'code', 'linenos',
                   'language', 'style')
 
+
 class UserSerializer(serializers.ModelSerializer):
     snippets = serializers.HyperlinkedRelatedField(
         many=True, view_name='snippet-detail', read_only=True)

@@ -30,6 +30,5 @@ class Snippet(models.Model):
         self.highlighted = highlight(self.code, lexer, formatter)
         super(Snippet, self).save(*args, **kwargs)
 
-
     class Meta:
         ordering = ('created',)
