@@ -8,6 +8,6 @@ class HomePageViewTest(TestCase):
     def test_home_page_resturns_correct_html(self):
         request = HttpRequest()
         response = home_page(request)
-        self.assertIn('<title>To-Do lists</title>', response.content)
-        self.assertTrue(response.content.startswith('<html>'))
-        self.assertTrue(response.content.endswith('</html>'))
+        expected_template = open('lists/templates/home.html').read()
+
+        self.assertEqual(expected_template, response.content)
